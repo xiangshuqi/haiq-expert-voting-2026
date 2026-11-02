@@ -255,7 +255,16 @@ SOFTWARE.
     return pdfBytesPromise;
   }
 
-  async function createBallotPdf(ids) {
+  function createExportInfo() {
+    const random = new Uint8Array(8);
+    globalThis.crypto.getRandomValues(random);
+    const suffix = Array.from(random, (byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const id = `${timestamp}_${suffix}`;
+    return { id, filename: `HAI-Q_${id}.pdf` };
+  }
+
+  async function createBallotPdf(ids, exportInfo = createExportInfo()) {
     if (!validIds(ids) || ids.length === 0) throw new Error('Choose between 1 and 10 different questions.');
     const [library, template] = await Promise.all([loadPdfLibrary(), basePdfBytes()]);
     const { PDFDocument, StandardFonts, rgb } = library;
@@ -297,6 +306,7 @@ SOFTWARE.
     pdf.setSubject(`Selected questions (${ids.length}/10): ${ids.map((id) => `Q${String(id).padStart(2, '0')}`).join(', ')}`);
     pdf.setCreator('HAI-Q 2026 Expert Voting');
     pdf.setProducer('HAI-Q ballot PDF export');
+    pdf.setKeywords([`HAIQ-Export-ID:${exportInfo.id}`]);
     pdf.setModificationDate(new Date());
     return pdf.save();
   }
@@ -313,12 +323,13 @@ SOFTWARE.
     saveButtons.forEach((button) => { button.textContent = 'Preparing PDF…'; });
     $('status-message').textContent = 'Loading the PDF tools and template…';
     try {
-      const bytes = await createBallotPdf(ids);
+      const exportInfo = createExportInfo();
+      const bytes = await createBallotPdf(ids, exportInfo);
       const blob = new Blob([bytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `HAI-Q_2026_Ballot_${ids.map((id) => String(id).padStart(2, '0')).join('-')}.pdf`;
+      anchor.download = exportInfo.filename;
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
